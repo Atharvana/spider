@@ -1,10 +1,30 @@
-// Spider v 1.0
+// Spider v 2.0
 // Bharat Kumar M.
 // Experimental Android Source crawler.
+// TODO: Should add another set of buckets with fileName sizes instead of starting chars.
+// TODO: Add persist and load method.
+
+/* 
+// FILE structure
+path of the folder that will be persisted
+total no of files
+'a',<no of files>
+.
+.
+'z',<no of files>
+'{'<no of files>
+all files names with paths
+filename1.c path2
+filename2.c path2
+.
+.
+.
+*/
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include "tinydir.h"
 
 const char* sFolderToIgnore[5] = {".","..","CVS"};
@@ -39,10 +59,10 @@ int parseSourceFolder(int* nTotalFiles, char* sPath2dir,sCustom* pSourceTree){
 			return 1;
 		}
 
-		printf("%s %s", sPath2dir, file.name);
+		//printf("%s %s", sPath2dir, file.name);
 		if (file.is_dir)
 		{
-			printf("/");
+			//printf("/");
 			int i = 0, bCheck = 1;
 			// check if the folder is to be ignored
 			for(i = 0; i< nSizeFolder2Ignore; i++){
@@ -62,9 +82,9 @@ int parseSourceFolder(int* nTotalFiles, char* sPath2dir,sCustom* pSourceTree){
 			}else{
 				cFile = 'z'+1;
 			}
-			printf("\n file name[0] is %c",file.name[0]);
-			printf("\n saved array is %c -> %d",cFile, cFile - 'a');
-			fflush(stdout);
+			//printf("\n file name[0] is %c",file.name[0]);
+			//printf("\n saved array is %c -> %d",cFile, cFile - 'a');
+			//fflush(stdout);
 			sFile* newFile = (sFile*)malloc(sizeof(sFile));
 			newFile->sFileName = (char*)malloc(sizeof(char)*(strlen(file.name)+2));
 			newFile->sPathName = (char*)malloc(sizeof(char)*(strlen(sPath2dir)+2));
@@ -75,7 +95,7 @@ int parseSourceFolder(int* nTotalFiles, char* sPath2dir,sCustom* pSourceTree){
 			(pSourceTree[cFile -'a']).nTotal += 1;			
 			*nTotalFiles += 1;
 		}
-		printf("\n");
+		//printf("\n");
 		tinydir_next(&dir);
 	}
 	tinydir_close(&dir);
@@ -99,27 +119,91 @@ int main( int argc, char** argv){
 		pSourceTree[i].nTotal = 0;
 		pSourceTree[i].sElements = NULL;
 	}
-	parseSourceFolder(&nTotal, sSourcePath,pSourceTree);
-	
-	printf("\n Total Files are : %d ",nTotal);
-	for(i = 0; i < k; i++){
-		printf("\n The No of files starting with '%c' are %d", 'a'+i, pSourceTree[i].nTotal);
-		fflush(stdout);
-		sFile* tempFile = pSourceTree[i].sElements;
-		for( j = 0; j< pSourceTree[i].nTotal; j++){
-			if(tempFile == NULL){
-				printf("\n Invalid Termination!!!");
-			}else{
-				printf("\n %d - %s, %s", j, tempFile->sFileName, tempFile->sPathName);
-				fflush(stdout);				
-				sFile* freeFile = tempFile;
-				tempFile = tempFile->next;
-				free(freeFile->sFileName);
-				free(freeFile->sPathName);
-				free(freeFile);
-				freeFile = NULL;				
+	/*
+	You can also use R_OK, W_OK, and X_OK in place of F_OK to check for read permission, write permission, and execute permission (respectively) rather than 
+	existence, and you can OR any of them together (i.e. check for both read and write permission using R_OK|W_OK)
+	*/
+	if( access( sPersistData, R_OK ) != -1 ) { 
+		// file exists
+		fp = fopen(sPersistData,"r");
+		fscanf(fp,"%s",sSourcePath);
+		printf("\n Reading Persistance DB : %s",sSourcePath);
+		fscanf(fp,"%d",&nTotal);
+		printf("\n Total Files are : %d ",nTotal);
+		char demoChar;
+		char sFileName[80];
+		char sPathName[256];
+		for(i = 0; i < k; i++){
+			fscanf(fp,"\n%c,%d", &demoChar, &pSourceTree[i].nTotal);
+			printf("\n The No of files starting with '%c' are %d", demoChar, pSourceTree[i].nTotal);
+		}
+		for(i = 0; i < k; i++){
+			for( j = 0; j< pSourceTree[i].nTotal; j++){
+				fscanf(fp,"%s %s",sFileName, sPathName);
+				sFile* newFile = (sFile*)malloc(sizeof(sFile));
+				newFile->sFileName = (char*)malloc(sizeof(char)*(strlen(sFileName)+2));
+				newFile->sPathName = (char*)malloc(sizeof(char)*(strlen(sPathName)+2));
+				strcpy(newFile->sFileName, sFileName);
+				strcpy(newFile->sPathName, sPathName);
+				newFile->next = (pSourceTree[i]).sElements;
+				(pSourceTree[i]).sElements = newFile;				
 			}
 		}
-	}
+		fclose(fp);
+		for(i = 0; i < k; i++){		
+			sFile* tempFile = pSourceTree[i].sElements;
+			for( j = 0; j< pSourceTree[i].nTotal; j++){
+				if(tempFile == NULL){
+					printf("\n Invalid Termination!!!");
+				}else{
+					printf("\n(%c) %d - %s, %s",'a'+i, j, tempFile->sFileName, tempFile->sPathName);					
+					sFile* freeFile = tempFile;
+					tempFile = tempFile->next;
+					free(freeFile->sFileName);
+					free(freeFile->sPathName);
+					free(freeFile);
+					freeFile = NULL;				
+				}
+			}
+		}		
+	} else {
+		// file doesn't exist, generate the file
+		fp = fopen(sPersistData,"w");
+		if(fp == NULL){
+			printf("\n Unable to Write Persistance Data");
+			if(pSourceTree) free(pSourceTree);
+			return -1;
+		}
+		printf("\n Writing Persistance DB : %s",sSourcePath);
+		// write path first
+		fprintf(fp,"%s",sSourcePath);
+		parseSourceFolder(&nTotal, sSourcePath,pSourceTree);
+		printf("\n Total Files are : %d ",nTotal);
+		fprintf(fp,"\n%d",nTotal);	// write the total no of files next
+		for(i = 0; i < k; i++){
+			printf("\n The No of files starting with '%c' are %d", 'a'+i, pSourceTree[i].nTotal);
+			fprintf(fp,"\n%c,%d",'a'+i, pSourceTree[i].nTotal); // write the element lists next
+			fflush(stdout);
+		}
+		for(i = 0; i < k; i++){		
+			sFile* tempFile = pSourceTree[i].sElements;
+			for( j = 0; j< pSourceTree[i].nTotal; j++){
+				if(tempFile == NULL){
+					printf("\n Invalid Termination!!!");
+				}else{
+					printf("\n %d - %s, %s", j, tempFile->sFileName, tempFile->sPathName);
+					fprintf(fp,"\n%s %s",tempFile->sFileName, tempFile->sPathName); // write the filenames and path names next
+					fflush(stdout);				
+					sFile* freeFile = tempFile;
+					tempFile = tempFile->next;
+					free(freeFile->sFileName);
+					free(freeFile->sPathName);
+					free(freeFile);
+					freeFile = NULL;				
+				}
+			}
+		}
+		fclose(fp);
+	}	
 	if(pSourceTree) free(pSourceTree);
 }
