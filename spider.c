@@ -102,23 +102,17 @@ int parseSourceFolder(int* nTotalFiles, char* sPath2dir,sCustom* pSourceTree){
 	return 0;
 }
 
-int main( int argc, char** argv){
+int fnPrepareData(int* nTotalFiles, char* sPersistData, char* sDemoPath, sCustom* pSourceTree){
 	FILE* fp;
-	char* sFileName = "omx_vdec_test.cpp";	
+	//char* sFileName = "omx_vdec_test.cpp";	
 	//char* sSourcePath = "/home/bharat/../../cygdrive/c/VE40B";
-	char* sSourcePath = "/home/bharat/bharat";
-	char* sPersistData = "savedData.dat";
-		
+	//char* sDemoPath = "/home/bharat/bharat";	
+	char sSourcePath[256];
 	// let us have 65 for each letter of the alphabet
 	int nTotal = 0;
-	int i, j, k;
-	k = 'z'-'a'+2;
-	printf("Total Array Values are : %d ",k);
-	sCustom* pSourceTree = (sCustom*)malloc(sizeof(sCustom)*k);	
-	for(i = 0; i < k; i++){		
-		pSourceTree[i].nTotal = 0;
-		pSourceTree[i].sElements = NULL;
-	}
+	int i, j, nBuckets;
+	nBuckets = 'z'-'a'+2;
+	*nTotalFiles = 0;
 	/*
 	You can also use R_OK, W_OK, and X_OK in place of F_OK to check for read permission, write permission, and execute permission (respectively) rather than 
 	existence, and you can OR any of them together (i.e. check for both read and write permission using R_OK|W_OK)
@@ -128,16 +122,20 @@ int main( int argc, char** argv){
 		fp = fopen(sPersistData,"r");
 		fscanf(fp,"%s",sSourcePath);
 		printf("\n Reading Persistance DB : %s",sSourcePath);
+		if(strcmp(sSourcePath,sDemoPath)!=0){
+			printf("\nError! Persistance file content path: %s is different from the path needed: %s", sSourcePath, sDemoPath);
+			return 2;
+		}
 		fscanf(fp,"%d",&nTotal);
 		printf("\n Total Files are : %d ",nTotal);
 		char demoChar;
 		char sFileName[80];
-		char sPathName[256];
-		for(i = 0; i < k; i++){
+		char sPathName[256];		
+		for(i = 0; i < nBuckets; i++){
 			fscanf(fp,"\n%c,%d", &demoChar, &pSourceTree[i].nTotal);
 			printf("\n The No of files starting with '%c' are %d", demoChar, pSourceTree[i].nTotal);
 		}
-		for(i = 0; i < k; i++){
+		for(i = 0; i < nBuckets; i++){
 			for( j = 0; j< pSourceTree[i].nTotal; j++){
 				fscanf(fp,"%s %s",sFileName, sPathName);
 				sFile* newFile = (sFile*)malloc(sizeof(sFile));
@@ -150,7 +148,7 @@ int main( int argc, char** argv){
 			}
 		}
 		fclose(fp);
-		for(i = 0; i < k; i++){		
+		for(i = 0; i < nBuckets; i++){		
 			sFile* tempFile = pSourceTree[i].sElements;
 			for( j = 0; j< pSourceTree[i].nTotal; j++){
 				if(tempFile == NULL){
@@ -168,10 +166,10 @@ int main( int argc, char** argv){
 		}		
 	} else {
 		// file doesn't exist, generate the file
+		strcpy(sSourcePath,sDemoPath);
 		fp = fopen(sPersistData,"w");
 		if(fp == NULL){
-			printf("\n Unable to Write Persistance Data");
-			if(pSourceTree) free(pSourceTree);
+			printf("\n Unable to Write Persistance Data");			
 			return -1;
 		}
 		printf("\n Writing Persistance DB : %s",sSourcePath);
@@ -180,12 +178,12 @@ int main( int argc, char** argv){
 		parseSourceFolder(&nTotal, sSourcePath,pSourceTree);
 		printf("\n Total Files are : %d ",nTotal);
 		fprintf(fp,"\n%d",nTotal);	// write the total no of files next
-		for(i = 0; i < k; i++){
+		for(i = 0; i < nBuckets; i++){
 			printf("\n The No of files starting with '%c' are %d", 'a'+i, pSourceTree[i].nTotal);
 			fprintf(fp,"\n%c,%d",'a'+i, pSourceTree[i].nTotal); // write the element lists next
 			fflush(stdout);
 		}
-		for(i = 0; i < k; i++){		
+		for(i = 0; i < nBuckets; i++){		
 			sFile* tempFile = pSourceTree[i].sElements;
 			for( j = 0; j< pSourceTree[i].nTotal; j++){
 				if(tempFile == NULL){
@@ -204,6 +202,30 @@ int main( int argc, char** argv){
 			}
 		}
 		fclose(fp);
-	}	
+	}
+	*nTotalFiles = nTotal;
+}
+
+
+int main( int argc, char** argv){
+	int i;
+	int nTotalFiles = 0;
+	int k = 'z'-'a'+2;
+	char* sDemoPath = "/home/bharat/bharat";
+	char* sPersistData = "savedData.dat";
+	printf("Total Array Values are : %d ",k);
+	sCustom* pSourceTree = (sCustom*)malloc(sizeof(sCustom)*k);	
+	for(i = 0; i < k; i++){		
+		pSourceTree[i].nTotal = 0;
+		pSourceTree[i].sElements = NULL;
+	}
+	if(2 == fnPrepareData(&nTotalFiles, sPersistData, sDemoPath, pSourceTree)){
+		if( remove( sPersistData ) != 0 ){
+			printf( "Error deleting file" );
+		} else{
+			printf( "File successfully deleted" );
+			fnPrepareData(&nTotalFiles, sPersistData, sDemoPath, pSourceTree);
+		}		 
+	}
 	if(pSourceTree) free(pSourceTree);
 }
