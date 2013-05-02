@@ -206,6 +206,81 @@ int fnPrepareData(int* nTotalFiles, char* sPersistData, char* sDemoPath, sCustom
 	*nTotalFiles = nTotal;
 }
 
+void formatToFileName(char* sFileName){
+	int x = strlen(sFileName);
+	int i = 0, j = 0;
+	int nBeginBlock = 0;
+	char* reqdChars;
+	char  sOutName[32];
+	for(i = 0; i<x ; i++){
+		//printf("\n %d is %d , %c ", i, sFileName[i], sFileName[i]);
+		if((sFileName[i]>='a' && sFileName[i]<='z') || 
+			(sFileName[i]>='A' && sFileName[i]<='Z')||
+			(sFileName[i]>='0' && sFileName[i]<='9')||
+			sFileName[i] == '.'|| sFileName[i] == '_'){			
+			sOutName[j++] = sFileName[i];
+			nBeginBlock = 1;
+		}
+		if(nBeginBlock == 1 && (sFileName[i] == ' '||sFileName[i] == '\t'||sFileName[i]=='\n'||sFileName[i]=='\r')){
+			//printf("\n Breaking");
+			break;
+		}
+	}
+	sOutName[j] = '\0';
+	reqdChars = strstr(sOutName,".h");
+	if(reqdChars==NULL){
+		// append  .h to this
+		sOutName[j] = '.';
+		sOutName[j+1] = 'h';
+		sOutName[j+2] = '\0';
+	}
+	strcpy(sFileName,sOutName);	
+}
+
+int getHeaderFilesNeeded(char* sRequiredFile, int* nTotalFiles, sCustom* pSourceTree){
+	//sCustom* stdHdrList = NULL;
+	//fnGetStdHdrs(stdHdrList);
+	char sFileLine[32];
+	char reqdFile[32];
+	int nBlanksAllowed = 15;
+	int bClearBlanks = 0;
+	char* filteredWord = "#include";	
+	FILE* fp = fopen(sRequiredFile,"r");
+	if(fp){
+		while((!feof(fp)&&(fgets(sFileLine,32,fp)!=NULL))&&(nBlanksAllowed>0)){
+			char* reqdChars;
+			reqdChars = strstr(sFileLine,filteredWord);
+			if(reqdChars!=NULL){
+				// strip "" or <> and if the name does'nt have a .h append it							
+				strncpy(reqdFile, reqdChars+(strlen(filteredWord)), (strlen(reqdChars) - strlen(filteredWord)));
+				//printf("\n The Required Header now was : %s with length : %d ",reqdFile, strlen(reqdFile));
+				formatToFileName(reqdFile);
+				printf("\n The Required Header now is : %s with length : %d ",reqdFile, strlen(reqdFile));
+				fflush(stdout);
+				// also check if it is a standard header
+				// also skip if it is already included to prevent infinite loop
+				/*
+				sFile* newFile = (sFile*)malloc(sizeof(sFile));
+				newFile->sFileName = (char*)malloc(sizeof(char)*(strlen(file.name)+2));
+				newFile->sPathName = (char*)malloc(sizeof(char)*(strlen(sPath2dir)+2));
+				strcpy(newFile->sFileName,file.name);
+				strcpy(newFile->sPathName,sPath2dir);
+				newFile->next = (pSourceTree[cFile -'a']).sElements;
+				(pSourceTree[cFile -'a']).sElements = newFile;
+				(pSourceTree[cFile -'a']).nTotal += 1;			
+				*nTotalFiles += 1;
+				*/
+				bClearBlanks = 1;
+			}else{
+				if(1 == bClearBlanks)
+					nBlanksAllowed--;
+			}
+		}
+	}else{
+		printf("\n Unable to Open the Source file : %s",sRequiredFile);
+	}
+}
+
 
 int main( int argc, char** argv){
 	int i;
@@ -213,6 +288,7 @@ int main( int argc, char** argv){
 	int k = 'z'-'a'+2;
 	char* sDemoPath = "/home/bharat/bharat";
 	char* sPersistData = "savedData.dat";
+	char* sTestFile = "gltest.c";
 	printf("Total Array Values are : %d ",k);
 	sCustom* pSourceTree = (sCustom*)malloc(sizeof(sCustom)*k);	
 	for(i = 0; i < k; i++){		
@@ -227,5 +303,6 @@ int main( int argc, char** argv){
 			fnPrepareData(&nTotalFiles, sPersistData, sDemoPath, pSourceTree);
 		}		 
 	}
-	if(pSourceTree) free(pSourceTree);
+	getHeaderFilesNeeded(sTestFile,NULL,NULL);
+	if(pSourceTree) free(pSourceTree);	
 }
