@@ -1,4 +1,4 @@
 spider
 ======
 
-A simple crawler for local files
+A custom crawler for local files
