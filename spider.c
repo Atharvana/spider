@@ -105,6 +105,71 @@ int parseSourceFolder(int* nTotalFiles,  char* fNameHas, char* sPath2dir,sCustom
 	return 0;
 }
 
+
+void fnAddToTree(char* sFileName,char * sPath2dir, sCustom* pSourceTree){
+	// store it
+	char cFile = sFileName[0];
+	if(cFile>='A' && cFile<='Z'){
+		cFile = sFileName[0] + ('a'-'A');
+	}if(cFile>='a' && cFile<='z'){				
+	}else{
+		cFile = 'z'+1;
+	}
+	sFile* newFile = (sFile*)malloc(sizeof(sFile));
+	newFile->sFileName = (char*)malloc(sizeof(char)*(strlen(sFileName)+2));
+	newFile->sPathName = (char*)malloc(sizeof(char)*(strlen(sPath2dir)+2));
+	strcpy(newFile->sFileName,sFileName);
+	strcpy(newFile->sPathName,sPath2dir);
+	newFile->next = (pSourceTree[cFile -'a']).sElements;
+	(pSourceTree[cFile -'a']).sElements = newFile;
+	(pSourceTree[cFile -'a']).nTotal += 1;	
+}
+
+void fnPrintTree(sCustom* pSourceTree){
+	int i, j;
+	int nBuckets = 'z'-'a'+2;
+	for(i = 0; i < nBuckets; i++){		
+		sFile* tempFile = pSourceTree[i].sElements;
+		for( j = 0; j< pSourceTree[i].nTotal; j++){
+			if(tempFile == NULL){
+				printf("\n Invalid Termination!!!");
+			}else{
+				printf("\n %d - %s, %s", j, tempFile->sFileName, tempFile->sPathName);				
+				tempFile = tempFile->next;									
+			}
+		}
+	}
+}
+
+int fnIsFNameInTree(char* sFileName, char* sPath2dir, sCustom* pSourceTree){
+	int i, j;
+	int nBuckets = 'z'-'a'+2;
+	char cFile = sFileName[0];
+	if(cFile>='A' && cFile<='Z'){
+		cFile = sFileName[0] + ('a'-'A');
+	}if(cFile>='a' && cFile<='z'){				
+	}else{
+		cFile = 'z'+1;
+	}
+	i = cFile - 'a';	
+	sFile* tempFile = pSourceTree[i].sElements;
+	for( j = 0; j< pSourceTree[i].nTotal; j++){
+		if(tempFile == NULL){
+			printf("\n Invalid Termination!!!");
+		}else{
+			//printf("\n(%c) %d - %s, %s",'a'+i, j, tempFile->sFileName, tempFile->sPathName);
+			if(0 == strcmp(tempFile->sFileName,sFileName)){
+				if(sPath2dir) {
+					strcpy(sPath2dir, tempFile->sPathName);
+				}
+				return 1;
+			}			
+			tempFile = tempFile->next;				
+		}
+	}	
+	return 0;
+}
+
 void fnClearData(sCustom* pSourceTree){
 	int i, j;
 	int nBuckets = 'z'-'a'+2;
@@ -240,11 +305,11 @@ void formatToFileName(char* sFileName){
 	strcpy(sFileName,sOutName);	
 }
 
-int getHeaderFilesNeeded(char* sRequiredFile, int* nTotalFiles, sCustom* pSourceTree){
-	//sCustom* stdHdrList = NULL;
-	//fnGetStdHdrs(stdHdrList);
+int getHeaderFilesNeeded(char* sRequiredFile, int* nTotalFiles, sCustom* pReqdTree, sCustom* pSourceTree, sCustom* pHeaderTree){
 	char sFileLine[32];
 	char reqdFile[32];
+	char reqdPath[256];
+	// the following two operators will prevent it from parsing the entire file, will break after 15 non header lines after a header is found.
 	int nBlanksAllowed = 15;
 	int bClearBlanks = 0;
 	char* filteredWord = "#include";	
@@ -258,11 +323,26 @@ int getHeaderFilesNeeded(char* sRequiredFile, int* nTotalFiles, sCustom* pSource
 				strncpy(reqdFile, reqdChars+(strlen(filteredWord)), (strlen(reqdChars) - strlen(filteredWord)));
 				//printf("\n The Required Header now was : %s with length : %d ",reqdFile, strlen(reqdFile));
 				formatToFileName(reqdFile);
-				printf("\n The Required Header now is : %s with length : %d ",reqdFile, strlen(reqdFile));
-				fflush(stdout);
-				// we will first add all files and then later check for duplicates.
-				// also check if it is a standard header
-				// also skip if it is already included to prevent infinite loop				
+				printf("\n The Required Header now is : %s with length : %d ",reqdFile, strlen(reqdFile));								
+				if(1 == fnIsFNameInTree( reqdFile, NULL, pHeaderTree)){
+					// Check if it is a standard header
+					printf("\n The Required Header : %s is a standard Header",reqdFile);
+				}else if( 1 == fnIsFNameInTree(reqdFile, NULL, pReqdTree)){
+					// skip if it is already included to prevent infinite loop
+					printf("\n The Required Header : %s is already in Queue ",reqdFile);
+				}else{
+					// check if the header could be found in the source headers					
+					if(1 == fnIsFNameInTree(reqdFile, reqdPath, pSourceTree)){
+						//printf("\n The Required Header : %s has been found at %s ",reqdFile, reqdPath);
+						fnAddToTree( reqdFile, reqdPath,pReqdTree);
+					}else{
+						//printf("\n The Required Header : %s has been not been found ",reqdFile);
+						fnAddToTree( reqdFile, "?",pReqdTree);
+					}
+					*nTotalFiles += 1;
+				}
+				fflush(stdout);				
+				// also 
 				/*
 				sFile* newFile = (sFile*)malloc(sizeof(sFile));
 				newFile->sFileName = (char*)malloc(sizeof(char)*(strlen(file.name)+2));
@@ -290,18 +370,20 @@ int main( int argc, char** argv){
 	int i;
 	int k 				= 'z'-'a'+2;
 	int nTotalFiles 	= 0;
-	int nTotHeaders 	= 0;	
+	int nTotHeaders 	= 0;
+	int nTotReqd		= 0;
 	char* stdHeaderPath = "/home/bharat/../../cygdrive/c/ndk-r8d/sources";
-	char* sDemoPath 	= "/home/bharat/bharat";  // "/home/bharat/../../cygdrive/c/VE40B";
+	char* sDemoPath 	= "/home/bharat/../../cygdrive/c"; //"/home/bharat/bharat";  // "/home/bharat/../../cygdrive/c/VE40B";
 	char* sPersistData 	= "savedData.dat";
 	char* sHeaderData  	= "headerData.dat";
 	char* sHeaderExt   	= ".h";
-	char* sTestFile 	= "gltest.c";
+	char* sTestFile 	= "omx_vdec_test.cpp";//"gltest.c";
 	time_t start, ends;
 	double seconds;
 	
 	sCustom* pHeaderTree;
 	sCustom* pSourceTree;
+	sCustom* pReqdTree;
 	
 	printf("Total Array Values are : %d ",k);
 	
@@ -323,7 +405,7 @@ int main( int argc, char** argv){
 	}	
 	time(&ends);
 	seconds = difftime(ends, start);
-	printf("\n Generating Headers took %lf seconds", seconds);
+	printf("\n Generating Headers took %lf seconds for %d files ", seconds, nTotHeaders);
 	// ends header list
 	
 	// creating sources list	
@@ -344,10 +426,22 @@ int main( int argc, char** argv){
 	}
 	time(&ends);
 	seconds = difftime( ends, start);
-	printf("\n Generating Sources DB took %lf seconds", seconds);
+	printf("\n Generating Sources DB took %lf seconds for %d files ", seconds, nTotalFiles);
 	// ends creating sources list
 	
-	getHeaderFilesNeeded(sTestFile,NULL,NULL);
+	// get the list of header files needed
+	time(&start);
+	printf("\n Getting the headers needed ..");
+	pReqdTree = (sCustom*)malloc(sizeof(sCustom)*k);	
+	for(i = 0; i < k; i++){		
+		pReqdTree[i].nTotal = 0;
+		pReqdTree[i].sElements = NULL;
+	}
+	getHeaderFilesNeeded(sTestFile, &nTotReqd, pReqdTree, pSourceTree, pHeaderTree);
+	
+	printf("\n Non Standard Headers are (%d):",nTotReqd);
+	fnPrintTree(pReqdTree);
+	
 	// reclaim all allocates spaces		
 	if(pHeaderTree)	{
 		fnClearData(pHeaderTree);
@@ -356,5 +450,9 @@ int main( int argc, char** argv){
 	if(pSourceTree) {
 		fnClearData(pSourceTree);
 		free(pSourceTree);
+	}
+	if(pReqdTree) {
+		fnClearData(pReqdTree);
+		free(pReqdTree);
 	}
 }
