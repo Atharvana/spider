@@ -125,10 +125,13 @@ void fnAddToTree(char* sFileName,char * sPath2dir, sCustom* pSourceTree){
 	(pSourceTree[cFile -'a']).nTotal += 1;	
 }
 
-void fnPrintTree(sCustom* pSourceTree){
+void fnPrintTree(sCustom* pSourceTree, char c){
 	int i, j;
-	int nBuckets = 'z'-'a'+2;
-	for(i = 0; i < nBuckets; i++){		
+	int nBuckets = 'z'-'a'+2;	
+	if(c != '?'){
+		i = c - 'a';
+	}
+	for((c == '?')?(i = 0):(i = c - 'a'); (c == '?')?(i < nBuckets):(i <(c - 'a' + 1 )); i++){
 		sFile* tempFile = pSourceTree[i].sElements;
 		for( j = 0; j< pSourceTree[i].nTotal; j++){
 			if(tempFile == NULL){
@@ -142,7 +145,13 @@ void fnPrintTree(sCustom* pSourceTree){
 }
 
 int fnIsFNameInTree(char* sFileName, char* sPath2dir, sCustom* pSourceTree){
-	int i, j;
+	char* sSpecial = strstr(sFileName,"/");
+	if(sSpecial!=NULL){
+		printf("\nFor / Case Changed Name from : %s to", sFileName);
+		sFileName = sSpecial+1;
+		printf(" %s",sFileName);
+	}
+	int i, j, a, b;
 	int nBuckets = 'z'-'a'+2;
 	char cFile = sFileName[0];
 	if(cFile>='A' && cFile<='Z'){
@@ -157,7 +166,29 @@ int fnIsFNameInTree(char* sFileName, char* sPath2dir, sCustom* pSourceTree){
 		if(tempFile == NULL){
 			printf("\n Invalid Termination!!!");
 		}else{
-			//printf("\n(%c) %d - %s, %s",'a'+i, j, tempFile->sFileName, tempFile->sPathName);
+			//char* sSpecial = strstr(sFileName,"/");
+			//if(sSpecial!=NULL){
+			//	//printf("\n Processing Special Case");
+			//	if(0 == strcmp(tempFile->sFileName,(sSpecial+1))){
+			//		// will add path check later.
+			//		if(sPath2dir) {
+			//			printf("\n(%c) %d - %s, %s  for %s ",'a'+i, j, tempFile->sFileName, tempFile->sPathName, sFileName);
+			//			strcpy(sPath2dir, tempFile->sPathName);
+			//		}
+			//		return 1;
+			//	}
+			//}
+			a = strlen(tempFile->sFileName);
+			b = strlen(sFileName);
+			if( a == b ) {
+				printf("\n These have same length :");
+				printf("\n %s (%d)",tempFile->sFileName, a);
+				printf("\n %s (%d)",sFileName, b );
+			}
+			if(strstr(tempFile->sFileName,sFileName)!= NULL){
+				printf("\n Names %s and %s are related ? ",tempFile->sFileName,sFileName);
+				printf("\n Strcmp returns %d for those names ",strcmp(tempFile->sFileName,sFileName));
+			}
 			if(0 == strcmp(tempFile->sFileName,sFileName)){
 				if(sPath2dir) {
 					strcpy(sPath2dir, tempFile->sPathName);
@@ -310,7 +341,7 @@ int getHeaderFilesNeeded(char* sRequiredFile, int* nTotalFiles, sCustom* pReqdTr
 	char reqdFile[32];
 	char reqdPath[256];
 	// the following two operators will prevent it from parsing the entire file, will break after 15 non header lines after a header is found.
-	int nBlanksAllowed = 15;
+	int nBlanksAllowed = 50;
 	int bClearBlanks = 0;
 	char* filteredWord = "#include";	
 	FILE* fp = fopen(sRequiredFile,"r");
@@ -327,16 +358,16 @@ int getHeaderFilesNeeded(char* sRequiredFile, int* nTotalFiles, sCustom* pReqdTr
 				if(1 == fnIsFNameInTree( reqdFile, NULL, pHeaderTree)){
 					// Check if it is a standard header
 					printf("\n The Required Header : %s is a standard Header",reqdFile);
-				}else if( 1 == fnIsFNameInTree(reqdFile, NULL, pReqdTree)){
-					// skip if it is already included to prevent infinite loop
-					printf("\n The Required Header : %s is already in Queue ",reqdFile);
+				//}else if( 1 == fnIsFNameInTree(reqdFile, NULL, pReqdTree)){
+				//	// skip if it is already included to prevent infinite loop
+				//	printf("\n The Required Header : %s is already in Queue ",reqdFile);
 				}else{
 					// check if the header could be found in the source headers					
 					if(1 == fnIsFNameInTree(reqdFile, reqdPath, pSourceTree)){
-						//printf("\n The Required Header : %s has been found at %s ",reqdFile, reqdPath);
+						printf("\n The Required Header : %s has been found In Src at %s ",reqdFile, reqdPath);
 						fnAddToTree( reqdFile, reqdPath,pReqdTree);
 					}else{
-						//printf("\n The Required Header : %s has been not been found ",reqdFile);
+						printf("\n The Required Header : %s has been not been found in Src ",reqdFile);
 						fnAddToTree( reqdFile, "?",pReqdTree);
 					}
 					*nTotalFiles += 1;
@@ -373,7 +404,7 @@ int main( int argc, char** argv){
 	int nTotHeaders 	= 0;
 	int nTotReqd		= 0;
 	char* stdHeaderPath = "/home/bharat/../../cygdrive/c/ndk-r8d/sources";
-	char* sDemoPath 	= "/home/bharat/../../cygdrive/c"; //"/home/bharat/bharat";  // "/home/bharat/../../cygdrive/c/VE40B";
+	char* sDemoPath 	= "/home/bharat/../../cygdrive/u"; //"/home/bharat/bharat";  // "/home/bharat/../../cygdrive/c/VE40B";
 	char* sPersistData 	= "savedData.dat";
 	char* sHeaderData  	= "headerData.dat";
 	char* sHeaderExt   	= ".h";
@@ -381,9 +412,9 @@ int main( int argc, char** argv){
 	time_t start, ends;
 	double seconds;
 	
-	sCustom* pHeaderTree;
-	sCustom* pSourceTree;
-	sCustom* pReqdTree;
+	sCustom* pHeaderTree 	= NULL;
+	sCustom* pSourceTree 	= NULL;
+	sCustom* pReqdTree 		= NULL;
 	
 	printf("Total Array Values are : %d ",k);
 	
@@ -416,12 +447,12 @@ int main( int argc, char** argv){
 		pSourceTree[i].nTotal = 0;
 		pSourceTree[i].sElements = NULL;
 	}
-	if(2 == fnPrepareData(&nTotalFiles, NULL, sPersistData, sDemoPath, pSourceTree)){
+	if(2 == fnPrepareData(&nTotalFiles, sHeaderExt, sPersistData, sDemoPath, pSourceTree)){
 		if( remove( sPersistData ) != 0 ){
 			printf( "Error deleting file" );
 		} else{
 			printf( "File successfully deleted" );
-			fnPrepareData(&nTotalFiles, NULL, sPersistData, sDemoPath, pSourceTree);
+			fnPrepareData(&nTotalFiles, sHeaderExt, sPersistData, sDemoPath, pSourceTree);
 		}		 
 	}
 	time(&ends);
@@ -429,6 +460,7 @@ int main( int argc, char** argv){
 	printf("\n Generating Sources DB took %lf seconds for %d files ", seconds, nTotalFiles);
 	// ends creating sources list
 	
+#if (0)	
 	// get the list of header files needed
 	time(&start);
 	printf("\n Getting the headers needed ..");
@@ -439,9 +471,9 @@ int main( int argc, char** argv){
 	}
 	getHeaderFilesNeeded(sTestFile, &nTotReqd, pReqdTree, pSourceTree, pHeaderTree);
 	
-	printf("\n Non Standard Headers are (%d):",nTotReqd);
-	fnPrintTree(pReqdTree);
-	
+	printf("\n Non Standard Headers are (%d):",nTotReqd);	
+#endif	
+	fnPrintTree(pSourceTree, 'u');
 	// reclaim all allocates spaces		
 	if(pHeaderTree)	{
 		fnClearData(pHeaderTree);
