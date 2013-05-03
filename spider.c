@@ -25,6 +25,7 @@ filename2.c path2
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>  
 #include "tinydir.h"
 
 const char* sFolderToIgnore[5] = {".","..","CVS"};
@@ -41,7 +42,7 @@ typedef struct{
 	sFile* sElements;
 }sCustom;
 
-int parseSourceFolder(int* nTotalFiles, char* sPath2dir,sCustom* pSourceTree){
+int parseSourceFolder(int* nTotalFiles,  char* fNameHas, char* sPath2dir,sCustom* pSourceTree){
 	tinydir_dir dir;
 	if (tinydir_open(&dir, sPath2dir) == -1)
 	{
@@ -71,29 +72,31 @@ int parseSourceFolder(int* nTotalFiles, char* sPath2dir,sCustom* pSourceTree){
 			if(bCheck == 1){
 				char sNewFilePath[strlen(sPath2dir)+strlen(file.name)+5];
 				sprintf(sNewFilePath,"%s/%s",sPath2dir,file.name);
-				parseSourceFolder(nTotalFiles, sNewFilePath, pSourceTree);
+				parseSourceFolder(nTotalFiles, fNameHas, sNewFilePath, pSourceTree);
 			}		
 		}else{
-			// store it
-			char cFile = file.name[0];
-			if(cFile>='A' && cFile<='Z'){
-				cFile = file.name[0] + ('a'-'A');
-			}if(cFile>='a' && cFile<='z'){				
-			}else{
-				cFile = 'z'+1;
+			if((fNameHas == NULL) ||((fNameHas!=NULL) && (strstr(file.name,fNameHas)!=NULL))){
+				// store it
+				char cFile = file.name[0];
+				if(cFile>='A' && cFile<='Z'){
+					cFile = file.name[0] + ('a'-'A');
+				}if(cFile>='a' && cFile<='z'){				
+				}else{
+					cFile = 'z'+1;
+				}
+				//printf("\n file name[0] is %c",file.name[0]);
+				//printf("\n saved array is %c -> %d",cFile, cFile - 'a');
+				//fflush(stdout);
+				sFile* newFile = (sFile*)malloc(sizeof(sFile));
+				newFile->sFileName = (char*)malloc(sizeof(char)*(strlen(file.name)+2));
+				newFile->sPathName = (char*)malloc(sizeof(char)*(strlen(sPath2dir)+2));
+				strcpy(newFile->sFileName,file.name);
+				strcpy(newFile->sPathName,sPath2dir);
+				newFile->next = (pSourceTree[cFile -'a']).sElements;
+				(pSourceTree[cFile -'a']).sElements = newFile;
+				(pSourceTree[cFile -'a']).nTotal += 1;			
+				*nTotalFiles += 1;
 			}
-			//printf("\n file name[0] is %c",file.name[0]);
-			//printf("\n saved array is %c -> %d",cFile, cFile - 'a');
-			//fflush(stdout);
-			sFile* newFile = (sFile*)malloc(sizeof(sFile));
-			newFile->sFileName = (char*)malloc(sizeof(char)*(strlen(file.name)+2));
-			newFile->sPathName = (char*)malloc(sizeof(char)*(strlen(sPath2dir)+2));
-			strcpy(newFile->sFileName,file.name);
-			strcpy(newFile->sPathName,sPath2dir);
-			newFile->next = (pSourceTree[cFile -'a']).sElements;
-			(pSourceTree[cFile -'a']).sElements = newFile;
-			(pSourceTree[cFile -'a']).nTotal += 1;			
-			*nTotalFiles += 1;
 		}
 		//printf("\n");
 		tinydir_next(&dir);
@@ -102,7 +105,28 @@ int parseSourceFolder(int* nTotalFiles, char* sPath2dir,sCustom* pSourceTree){
 	return 0;
 }
 
-int fnPrepareData(int* nTotalFiles, char* sPersistData, char* sDemoPath, sCustom* pSourceTree){
+void fnClearData(sCustom* pSourceTree){
+	int i, j;
+	int nBuckets = 'z'-'a'+2;
+	for(i = 0; i < nBuckets; i++){		
+		sFile* tempFile = pSourceTree[i].sElements;
+		for( j = 0; j< pSourceTree[i].nTotal; j++){
+			if(tempFile == NULL){
+				printf("\n Invalid Termination!!!");
+			}else{
+				//printf("\n(%c) %d - %s, %s",'a'+i, j, tempFile->sFileName, tempFile->sPathName);					
+				sFile* freeFile = tempFile;
+				tempFile = tempFile->next;
+				free(freeFile->sFileName);
+				free(freeFile->sPathName);
+				free(freeFile);
+				freeFile = NULL;				
+			}
+		}
+	}	
+}
+
+int fnPrepareData(int* nTotalFiles, char* fNameHas, char* sPersistData, char* sDemoPath, sCustom* pSourceTree){
 	FILE* fp;
 	//char* sFileName = "omx_vdec_test.cpp";	
 	//char* sSourcePath = "/home/bharat/../../cygdrive/c/VE40B";
@@ -127,13 +151,13 @@ int fnPrepareData(int* nTotalFiles, char* sPersistData, char* sDemoPath, sCustom
 			return 2;
 		}
 		fscanf(fp,"%d",&nTotal);
-		printf("\n Total Files are : %d ",nTotal);
+		//printf("\n Total Files are : %d ",nTotal);
 		char demoChar;
 		char sFileName[80];
 		char sPathName[256];		
 		for(i = 0; i < nBuckets; i++){
 			fscanf(fp,"\n%c,%d", &demoChar, &pSourceTree[i].nTotal);
-			printf("\n The No of files starting with '%c' are %d", demoChar, pSourceTree[i].nTotal);
+			//printf("\n The No of files starting with '%c' are %d", demoChar, pSourceTree[i].nTotal);
 		}
 		for(i = 0; i < nBuckets; i++){
 			for( j = 0; j< pSourceTree[i].nTotal; j++){
@@ -147,23 +171,7 @@ int fnPrepareData(int* nTotalFiles, char* sPersistData, char* sDemoPath, sCustom
 				(pSourceTree[i]).sElements = newFile;				
 			}
 		}
-		fclose(fp);
-		for(i = 0; i < nBuckets; i++){		
-			sFile* tempFile = pSourceTree[i].sElements;
-			for( j = 0; j< pSourceTree[i].nTotal; j++){
-				if(tempFile == NULL){
-					printf("\n Invalid Termination!!!");
-				}else{
-					printf("\n(%c) %d - %s, %s",'a'+i, j, tempFile->sFileName, tempFile->sPathName);					
-					sFile* freeFile = tempFile;
-					tempFile = tempFile->next;
-					free(freeFile->sFileName);
-					free(freeFile->sPathName);
-					free(freeFile);
-					freeFile = NULL;				
-				}
-			}
-		}		
+		fclose(fp);			
 	} else {
 		// file doesn't exist, generate the file
 		strcpy(sSourcePath,sDemoPath);
@@ -175,13 +183,13 @@ int fnPrepareData(int* nTotalFiles, char* sPersistData, char* sDemoPath, sCustom
 		printf("\n Writing Persistance DB : %s",sSourcePath);
 		// write path first
 		fprintf(fp,"%s",sSourcePath);
-		parseSourceFolder(&nTotal, sSourcePath,pSourceTree);
-		printf("\n Total Files are : %d ",nTotal);
+		parseSourceFolder(&nTotal, fNameHas, sSourcePath,pSourceTree);
+		//printf("\n Total Files are : %d ",nTotal);
 		fprintf(fp,"\n%d",nTotal);	// write the total no of files next
 		for(i = 0; i < nBuckets; i++){
-			printf("\n The No of files starting with '%c' are %d", 'a'+i, pSourceTree[i].nTotal);
+			//printf("\n The No of files starting with '%c' are %d", 'a'+i, pSourceTree[i].nTotal);
 			fprintf(fp,"\n%c,%d",'a'+i, pSourceTree[i].nTotal); // write the element lists next
-			fflush(stdout);
+			//fflush(stdout);
 		}
 		for(i = 0; i < nBuckets; i++){		
 			sFile* tempFile = pSourceTree[i].sElements;
@@ -189,15 +197,10 @@ int fnPrepareData(int* nTotalFiles, char* sPersistData, char* sDemoPath, sCustom
 				if(tempFile == NULL){
 					printf("\n Invalid Termination!!!");
 				}else{
-					printf("\n %d - %s, %s", j, tempFile->sFileName, tempFile->sPathName);
+					//printf("\n %d - %s, %s", j, tempFile->sFileName, tempFile->sPathName);
 					fprintf(fp,"\n%s %s",tempFile->sFileName, tempFile->sPathName); // write the filenames and path names next
-					fflush(stdout);				
-					sFile* freeFile = tempFile;
-					tempFile = tempFile->next;
-					free(freeFile->sFileName);
-					free(freeFile->sPathName);
-					free(freeFile);
-					freeFile = NULL;				
+					//fflush(stdout);					
+					tempFile = tempFile->next;									
 				}
 			}
 		}
@@ -217,7 +220,7 @@ void formatToFileName(char* sFileName){
 		if((sFileName[i]>='a' && sFileName[i]<='z') || 
 			(sFileName[i]>='A' && sFileName[i]<='Z')||
 			(sFileName[i]>='0' && sFileName[i]<='9')||
-			sFileName[i] == '.'|| sFileName[i] == '_'){			
+			sFileName[i] == '.'|| sFileName[i] == '_' || sFileName[i] == '/'){			
 			sOutName[j++] = sFileName[i];
 			nBeginBlock = 1;
 		}
@@ -257,8 +260,9 @@ int getHeaderFilesNeeded(char* sRequiredFile, int* nTotalFiles, sCustom* pSource
 				formatToFileName(reqdFile);
 				printf("\n The Required Header now is : %s with length : %d ",reqdFile, strlen(reqdFile));
 				fflush(stdout);
+				// we will first add all files and then later check for duplicates.
 				// also check if it is a standard header
-				// also skip if it is already included to prevent infinite loop
+				// also skip if it is already included to prevent infinite loop				
 				/*
 				sFile* newFile = (sFile*)malloc(sizeof(sFile));
 				newFile->sFileName = (char*)malloc(sizeof(char)*(strlen(file.name)+2));
@@ -284,25 +288,73 @@ int getHeaderFilesNeeded(char* sRequiredFile, int* nTotalFiles, sCustom* pSource
 
 int main( int argc, char** argv){
 	int i;
-	int nTotalFiles = 0;
-	int k = 'z'-'a'+2;
-	char* sDemoPath = "/home/bharat/bharat";
-	char* sPersistData = "savedData.dat";
-	char* sTestFile = "gltest.c";
+	int k 				= 'z'-'a'+2;
+	int nTotalFiles 	= 0;
+	int nTotHeaders 	= 0;	
+	char* stdHeaderPath = "/home/bharat/../../cygdrive/c/ndk-r8d/sources";
+	char* sDemoPath 	= "/home/bharat/bharat";  // "/home/bharat/../../cygdrive/c/VE40B";
+	char* sPersistData 	= "savedData.dat";
+	char* sHeaderData  	= "headerData.dat";
+	char* sHeaderExt   	= ".h";
+	char* sTestFile 	= "gltest.c";
+	time_t start, ends;
+	double seconds;
+	
+	sCustom* pHeaderTree;
+	sCustom* pSourceTree;
+	
 	printf("Total Array Values are : %d ",k);
-	sCustom* pSourceTree = (sCustom*)malloc(sizeof(sCustom)*k);	
+	
+	// creating header list
+	time(&start);
+	printf("\n Preparing Header Sources from: %s ",stdHeaderPath);
+	pHeaderTree = (sCustom*)malloc(sizeof(sCustom)*k);	
+	for(i = 0; i < k; i++){		
+		pHeaderTree[i].nTotal = 0;
+		pHeaderTree[i].sElements = NULL;
+	}	
+	if(2 == fnPrepareData(&nTotHeaders, sHeaderExt, sHeaderData, stdHeaderPath, pHeaderTree)){
+		if( remove( sHeaderData ) != 0 ){
+			printf( "Error deleting file" );
+		} else{
+			printf( "File successfully deleted" );
+			fnPrepareData(&nTotHeaders, sHeaderExt, sHeaderData, stdHeaderPath, pHeaderTree);
+		}		 
+	}	
+	time(&ends);
+	seconds = difftime(ends, start);
+	printf("\n Generating Headers took %lf seconds", seconds);
+	// ends header list
+	
+	// creating sources list	
+	time(&start);
+	printf("\n Preparing Sources from: %s ",sDemoPath);
+	pSourceTree = (sCustom*)malloc(sizeof(sCustom)*k);	
 	for(i = 0; i < k; i++){		
 		pSourceTree[i].nTotal = 0;
 		pSourceTree[i].sElements = NULL;
 	}
-	if(2 == fnPrepareData(&nTotalFiles, sPersistData, sDemoPath, pSourceTree)){
+	if(2 == fnPrepareData(&nTotalFiles, NULL, sPersistData, sDemoPath, pSourceTree)){
 		if( remove( sPersistData ) != 0 ){
 			printf( "Error deleting file" );
 		} else{
 			printf( "File successfully deleted" );
-			fnPrepareData(&nTotalFiles, sPersistData, sDemoPath, pSourceTree);
+			fnPrepareData(&nTotalFiles, NULL, sPersistData, sDemoPath, pSourceTree);
 		}		 
 	}
+	time(&ends);
+	seconds = difftime( ends, start);
+	printf("\n Generating Sources DB took %lf seconds", seconds);
+	// ends creating sources list
+	
 	getHeaderFilesNeeded(sTestFile,NULL,NULL);
-	if(pSourceTree) free(pSourceTree);	
+	// reclaim all allocates spaces		
+	if(pHeaderTree)	{
+		fnClearData(pHeaderTree);
+		free(pHeaderTree);
+	}
+	if(pSourceTree) {
+		fnClearData(pSourceTree);
+		free(pSourceTree);
+	}
 }
