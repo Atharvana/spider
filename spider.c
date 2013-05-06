@@ -147,9 +147,9 @@ void fnPrintTree(sCustom* pSourceTree, char c){
 int fnIsFNameInTree(char* sFileName, char* sPath2dir, sCustom* pSourceTree){
 	char* sSpecial = strstr(sFileName,"/");
 	if(sSpecial!=NULL){
-		printf("\nFor / Case Changed Name from : %s to", sFileName);
+		//printf("\nFor / Case Changed Name from : %s to", sFileName);
 		sFileName = sSpecial+1;
-		printf(" %s",sFileName);
+		//printf(" %s",sFileName);
 	}
 	int i, j, a, b;
 	int nBuckets = 'z'-'a'+2;
@@ -178,17 +178,17 @@ int fnIsFNameInTree(char* sFileName, char* sPath2dir, sCustom* pSourceTree){
 			//		return 1;
 			//	}
 			//}
-			a = strlen(tempFile->sFileName);
-			b = strlen(sFileName);
-			if( a == b ) {
-				printf("\n These have same length :");
-				printf("\n %s (%d)",tempFile->sFileName, a);
-				printf("\n %s (%d)",sFileName, b );
-			}
-			if(strstr(tempFile->sFileName,sFileName)!= NULL){
-				printf("\n Names %s and %s are related ? ",tempFile->sFileName,sFileName);
-				printf("\n Strcmp returns %d for those names ",strcmp(tempFile->sFileName,sFileName));
-			}
+			//a = strlen(tempFile->sFileName);
+			//b = strlen(sFileName);
+			//if( a == b ) {
+			//	printf("\n These have same length :");
+			//	printf("\n %s (%d)",tempFile->sFileName, a);
+			//	printf("\n %s (%d)",sFileName, b );
+			//}
+			//if(strstr(tempFile->sFileName,sFileName)!= NULL){
+			//	printf("\n Names %s and %s are related ? ",tempFile->sFileName,sFileName);
+			//	printf("\n Strcmp returns %d for those names ",strcmp(tempFile->sFileName,sFileName));
+			//}
 			if(0 == strcmp(tempFile->sFileName,sFileName)){
 				if(sPath2dir) {
 					strcpy(sPath2dir, tempFile->sPathName);
@@ -247,7 +247,8 @@ int fnPrepareData(int* nTotalFiles, char* fNameHas, char* sPersistData, char* sD
 			return 2;
 		}
 		fscanf(fp,"%d",&nTotal);
-		//printf("\n Total Files are : %d ",nTotal);
+		printf("\n Total Files are : %d ",nTotal);
+		*nTotalFiles = nTotal;
 		char demoChar;
 		char sFileName[80];
 		char sPathName[256];		
@@ -255,16 +256,25 @@ int fnPrepareData(int* nTotalFiles, char* fNameHas, char* sPersistData, char* sD
 			fscanf(fp,"\n%c,%d", &demoChar, &pSourceTree[i].nTotal);
 			//printf("\n The No of files starting with '%c' are %d", demoChar, pSourceTree[i].nTotal);
 		}
+		char* sTestString = NULL;
 		for(i = 0; i < nBuckets; i++){
 			for( j = 0; j< pSourceTree[i].nTotal; j++){
-				fscanf(fp,"%s %s",sFileName, sPathName);
-				sFile* newFile = (sFile*)malloc(sizeof(sFile));
-				newFile->sFileName = (char*)malloc(sizeof(char)*(strlen(sFileName)+2));
-				newFile->sPathName = (char*)malloc(sizeof(char)*(strlen(sPathName)+2));
-				strcpy(newFile->sFileName, sFileName);
-				strcpy(newFile->sPathName, sPathName);
-				newFile->next = (pSourceTree[i]).sElements;
-				(pSourceTree[i]).sElements = newFile;				
+				fscanf(fp,"%s %[^\n]",sFileName, sPathName);
+				sTestString = strstr(sFileName,"/");
+				if(sTestString != NULL ){
+					printf("\n Path and Name are being exchanged for : name : %s , path: %s" , sFileName, sPathName);
+					printf("\n The Position in the file is %l, %d",ftell(fp), ftell(fp));
+					printf("\n Ignoring file");
+					//return -1;
+				}else{
+					sFile* newFile = (sFile*)malloc(sizeof(sFile));
+					newFile->sFileName = (char*)malloc(sizeof(char)*(strlen(sFileName)+2));
+					newFile->sPathName = (char*)malloc(sizeof(char)*(strlen(sPathName)+2));
+					strcpy(newFile->sFileName, sFileName);
+					strcpy(newFile->sPathName, sPathName);
+					newFile->next = (pSourceTree[i]).sElements;
+					(pSourceTree[i]).sElements = newFile;
+				}
 			}
 		}
 		fclose(fp);			
@@ -279,8 +289,10 @@ int fnPrepareData(int* nTotalFiles, char* fNameHas, char* sPersistData, char* sD
 		printf("\n Writing Persistance DB : %s",sSourcePath);
 		// write path first
 		fprintf(fp,"%s",sSourcePath);
+		nTotal = 0;
 		parseSourceFolder(&nTotal, fNameHas, sSourcePath,pSourceTree);
 		//printf("\n Total Files are : %d ",nTotal);
+		*nTotalFiles = nTotal;
 		fprintf(fp,"\n%d",nTotal);	// write the total no of files next
 		for(i = 0; i < nBuckets; i++){
 			//printf("\n The No of files starting with '%c' are %d", 'a'+i, pSourceTree[i].nTotal);
@@ -301,8 +313,7 @@ int fnPrepareData(int* nTotalFiles, char* fNameHas, char* sPersistData, char* sD
 			}
 		}
 		fclose(fp);
-	}
-	*nTotalFiles = nTotal;
+	}	
 }
 
 void formatToFileName(char* sFileName){
@@ -354,7 +365,7 @@ int getHeaderFilesNeeded(char* sRequiredFile, int* nTotalFiles, sCustom* pReqdTr
 				strncpy(reqdFile, reqdChars+(strlen(filteredWord)), (strlen(reqdChars) - strlen(filteredWord)));
 				//printf("\n The Required Header now was : %s with length : %d ",reqdFile, strlen(reqdFile));
 				formatToFileName(reqdFile);
-				printf("\n The Required Header now is : %s with length : %d ",reqdFile, strlen(reqdFile));								
+				//printf("\n The Required Header now is : %s with length : %d ",reqdFile, strlen(reqdFile));								
 				if(1 == fnIsFNameInTree( reqdFile, NULL, pHeaderTree)){
 					// Check if it is a standard header
 					printf("\n The Required Header : %s is a standard Header",reqdFile);
@@ -447,20 +458,27 @@ int main( int argc, char** argv){
 		pSourceTree[i].nTotal = 0;
 		pSourceTree[i].sElements = NULL;
 	}
-	if(2 == fnPrepareData(&nTotalFiles, sHeaderExt, sPersistData, sDemoPath, pSourceTree)){
+	nTotalFiles 	= 0;
+	int nValue = fnPrepareData(&nTotalFiles, sHeaderExt, sPersistData, sDemoPath, pSourceTree);
+	if(2 == nValue){
 		if( remove( sPersistData ) != 0 ){
 			printf( "Error deleting file" );
 		} else{
 			printf( "File successfully deleted" );
+			nTotalFiles 	= 0;
 			fnPrepareData(&nTotalFiles, sHeaderExt, sPersistData, sDemoPath, pSourceTree);
 		}		 
 	}
+	if(-1 == nValue){
+		printf("\n Error in Program! ")	;		
+		return -1;
+	}
 	time(&ends);
 	seconds = difftime( ends, start);
-	printf("\n Generating Sources DB took %lf seconds for %d files ", seconds, nTotalFiles);
+	printf("\n Generating Sources DB for %d files took %lf seconds  ", nTotalFiles, seconds);
 	// ends creating sources list
 	
-#if (0)	
+#if (1)	
 	// get the list of header files needed
 	time(&start);
 	printf("\n Getting the headers needed ..");
@@ -471,9 +489,10 @@ int main( int argc, char** argv){
 	}
 	getHeaderFilesNeeded(sTestFile, &nTotReqd, pReqdTree, pSourceTree, pHeaderTree);
 	
-	printf("\n Non Standard Headers are (%d):",nTotReqd);	
+	printf("\n Non Standard Headers are (%d):",nTotReqd);
+	fnPrintTree(pReqdTree, '?');
 #endif	
-	fnPrintTree(pSourceTree, 'u');
+//	fnPrintTree(pSourceTree, 'u');
 	// reclaim all allocates spaces		
 	if(pHeaderTree)	{
 		fnClearData(pHeaderTree);
